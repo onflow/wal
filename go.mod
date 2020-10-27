@@ -1,6 +1,6 @@
-module github.com/prometheus/prometheus
+module github.com/m4ksio/wal
 
-go 1.14
+go 1.13
 
 require (
 	github.com/Azure/azure-sdk-for-go v46.4.0+incompatible // indirect
@@ -40,6 +40,8 @@ require (
 	github.com/prometheus/alertmanager v0.21.0 // indirect
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/common v0.14.0 // indirect
+	github.com/prometheus/prometheus v2.5.0+incompatible
+	github.com/prometheus/tsdb v0.10.0 // indirect
 	github.com/samuel/go-zookeeper v0.0.0-20200724154423-2164a8ac840e
 	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
 	github.com/stretchr/testify v1.6.1
@@ -60,39 +62,4 @@ require (
 	k8s.io/client-go v0.19.2 // indirect
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.3.0 // indirect
-)
-
-replace (
-	k8s.io/klog => github.com/simonpasquier/klog-gokit v0.3.0
-	k8s.io/klog/v2 => github.com/simonpasquier/klog-gokit/v2 v2.0.1
-)
-
-exclude (
-	// Exclude grpc v1.30.0 because of breaking changes. See #7621.
-	github.com/grpc-ecosystem/grpc-gateway v1.14.7
-	google.golang.org/api v0.30.0
-
-	// Exclude pre-go-mod kubernetes tags, as they are older
-	// than v0.x releases but are picked when we update the dependencies.
-	k8s.io/client-go v1.4.0
-	k8s.io/client-go v1.4.0+incompatible
-	k8s.io/client-go v1.5.0
-	k8s.io/client-go v1.5.0+incompatible
-	k8s.io/client-go v1.5.1
-	k8s.io/client-go v1.5.1+incompatible
-	k8s.io/client-go v10.0.0+incompatible
-	k8s.io/client-go v11.0.0+incompatible
-	k8s.io/client-go v2.0.0+incompatible
-	k8s.io/client-go v2.0.0-alpha.1+incompatible
-	k8s.io/client-go v3.0.0+incompatible
-	k8s.io/client-go v3.0.0-beta.0+incompatible
-	k8s.io/client-go v4.0.0+incompatible
-	k8s.io/client-go v4.0.0-beta.0+incompatible
-	k8s.io/client-go v5.0.0+incompatible
-	k8s.io/client-go v5.0.1+incompatible
-	k8s.io/client-go v6.0.0+incompatible
-	k8s.io/client-go v7.0.0+incompatible
-	k8s.io/client-go v8.0.0+incompatible
-	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/client-go v9.0.0-invalid+incompatible
 )

@@ -895,6 +895,6 @@ func (r *segmentBufReader) Read(b []byte) (n int, err error) {
 
 // Computing size of the WAL.
 // We do this by adding the sizes of all the files under the WAL dir.
-func (w *WAL) Size() (int64, error) {
-	return fileutil.DirSize(w.Dir())
-}
+//func (w *WAL) Size() (int64, error) {
+//	return fileutil.DirSize(w.Dir())
+//}
