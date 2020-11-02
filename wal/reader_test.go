@@ -24,16 +24,11 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"testing"
-	"time"
 
-	"github.com/go-kit/kit/log"
 	"github.com/stretchr/testify/assert"
 
-	tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
-	"github.com/prometheus/prometheus/util/testutil"
+	tsdb_errors "github.com/m4ksio/wal/tsdb/errors"
 )
 
 type reader interface {
@@ -51,11 +46,6 @@ type rec struct {
 var readerConstructors = map[string]func(io.Reader) reader{
 	"Reader": func(r io.Reader) reader {
 		return NewReader(r)
-	},
-	"LiveReader": func(r io.Reader) reader {
-		lr := NewLiveReader(log.NewNopLogger(), NewLiveReaderMetrics(nil), r)
-		lr.eofNonErr = true
-		return lr
 	},
 }
 
@@ -196,47 +186,6 @@ func TestReader(t *testing.T) {
 	}
 }
 
-func TestReader_Live(t *testing.T) {
-	logger := testutil.NewLogger(t)
-
-	for i := range testReaderCases {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			writeFd, err := ioutil.TempFile("", "TestReader_Live")
-			assert.NoError(t, err)
-			defer os.Remove(writeFd.Name())
-
-			go func(i int) {
-				for _, rec := range testReaderCases[i].t {
-					rec := encodedRecord(rec.t, rec.b)
-					_, err := writeFd.Write(rec)
-					assert.NoError(t, err)
-					runtime.Gosched()
-				}
-				writeFd.Close()
-			}(i)
-
-			// Read from a second FD on the same file.
-			readFd, err := os.Open(writeFd.Name())
-			assert.NoError(t, err)
-			reader := NewLiveReader(logger, NewLiveReaderMetrics(nil), readFd)
-			for _, exp := range testReaderCases[i].exp {
-				for !reader.Next() {
-					assert.True(t, reader.Err() == io.EOF, "expect EOF, got: %v", reader.Err())
-					runtime.Gosched()
-				}
-
-				actual := reader.Record()
-				assert.Equal(t, exp, actual, "read wrong record")
-			}
-
-			assert.True(t, !reader.Next(), "unexpected record")
-			if testReaderCases[i].fail {
-				assert.Error(t, reader.Err())
-			}
-		})
-	}
-}
-
 const fuzzLen = 500
 
 func generateRandomEntries(w *WAL, records chan []byte) error {
@@ -345,184 +294,6 @@ func TestReaderFuzz(t *testing.T) {
 			})
 		}
 	}
-}
-
-func TestReaderFuzz_Live(t *testing.T) {
-	logger := testutil.NewLogger(t)
-	for _, compress := range []bool{false, true} {
-		t.Run(fmt.Sprintf("compress=%t", compress), func(t *testing.T) {
-			dir, err := ioutil.TempDir("", "wal_fuzz_live")
-			assert.NoError(t, err)
-			defer func() {
-				assert.NoError(t, os.RemoveAll(dir))
-			}()
-
-			w, err := NewSize(nil, nil, dir, 128*pageSize, compress)
-			assert.NoError(t, err)
-			defer w.Close()
-
-			// In the background, generate a stream of random records and write them
-			// to the WAL.
-			input := make(chan []byte, fuzzLen/10) // buffering required as we sometimes batch WAL writes.
-			done := make(chan struct{})
-			go func() {
-				err := generateRandomEntries(w, input)
-				assert.NoError(t, err)
-				time.Sleep(100 * time.Millisecond)
-				close(done)
-			}()
-
-			// Tail the WAL and compare the results.
-			m, _, err := Segments(w.Dir())
-			assert.NoError(t, err)
-
-			seg, err := OpenReadSegment(SegmentName(dir, m))
-			assert.NoError(t, err)
-			defer seg.Close()
-
-			r := NewLiveReader(logger, nil, seg)
-			segmentTicker := time.NewTicker(100 * time.Millisecond)
-			readTicker := time.NewTicker(10 * time.Millisecond)
-
-			readSegment := func(r *LiveReader) bool {
-				for r.Next() {
-					rec := r.Record()
-					expected, ok := <-input
-					assert.True(t, ok, "unexpected record")
-					assert.Equal(t, expected, rec, "record does not match expected")
-				}
-				assert.True(t, r.Err() == io.EOF, "expected EOF, got: %v", r.Err())
-				return true
-			}
-
-		outer:
-			for {
-				select {
-				case <-segmentTicker.C:
-					// check if new segments exist
-					_, last, err := Segments(w.Dir())
-					assert.NoError(t, err)
-					if last <= seg.i {
-						continue
-					}
-
-					// read to end of segment.
-					readSegment(r)
-
-					fi, err := os.Stat(SegmentName(dir, seg.i))
-					assert.NoError(t, err)
-					assert.True(t, r.Offset() == fi.Size(), "expected to have read whole segment, but read %d of %d", r.Offset(), fi.Size())
-
-					seg, err = OpenReadSegment(SegmentName(dir, seg.i+1))
-					assert.NoError(t, err)
-					defer seg.Close()
-					r = NewLiveReader(logger, nil, seg)
-
-				case <-readTicker.C:
-					readSegment(r)
-
-				case <-done:
-					readSegment(r)
-					break outer
-				}
-			}
-
-			assert.True(t, r.Err() == io.EOF, "expected EOF")
-		})
-	}
-}
-
-func TestLiveReaderCorrupt_ShortFile(t *testing.T) {
-	// Write a corrupt WAL segment, there is one record of pageSize in length,
-	// but the segment is only half written.
-	logger := testutil.NewLogger(t)
-	dir, err := ioutil.TempDir("", "wal_live_corrupt")
-	assert.NoError(t, err)
-	defer func() {
-		assert.NoError(t, os.RemoveAll(dir))
-	}()
-
-	w, err := NewSize(nil, nil, dir, pageSize, false)
-	assert.NoError(t, err)
-
-	rec := make([]byte, pageSize-recordHeaderSize)
-	_, err = rand.Read(rec)
-	assert.NoError(t, err)
-
-	err = w.Log(rec)
-	assert.NoError(t, err)
-
-	err = w.Close()
-	assert.NoError(t, err)
-
-	segmentFile, err := os.OpenFile(filepath.Join(dir, "00000000"), os.O_RDWR, 0666)
-	assert.NoError(t, err)
-
-	err = segmentFile.Truncate(pageSize / 2)
-	assert.NoError(t, err)
-
-	err = segmentFile.Close()
-	assert.NoError(t, err)
-
-	// Try and LiveReader it.
-	m, _, err := Segments(w.Dir())
-	assert.NoError(t, err)
-
-	seg, err := OpenReadSegment(SegmentName(dir, m))
-	assert.NoError(t, err)
-	defer seg.Close()
-
-	r := NewLiveReader(logger, nil, seg)
-	assert.True(t, r.Next() == false, "expected no records")
-	assert.True(t, r.Err() == io.EOF, "expected error, got: %v", r.Err())
-}
-
-func TestLiveReaderCorrupt_RecordTooLongAndShort(t *testing.T) {
-	// Write a corrupt WAL segment, when record len > page size.
-	logger := testutil.NewLogger(t)
-	dir, err := ioutil.TempDir("", "wal_live_corrupt")
-	assert.NoError(t, err)
-	defer func() {
-		assert.NoError(t, os.RemoveAll(dir))
-	}()
-
-	w, err := NewSize(nil, nil, dir, pageSize*2, false)
-	assert.NoError(t, err)
-
-	rec := make([]byte, pageSize-recordHeaderSize)
-	_, err = rand.Read(rec)
-	assert.NoError(t, err)
-
-	err = w.Log(rec)
-	assert.NoError(t, err)
-
-	err = w.Close()
-	assert.NoError(t, err)
-
-	segmentFile, err := os.OpenFile(filepath.Join(dir, "00000000"), os.O_RDWR, 0666)
-	assert.NoError(t, err)
-
-	// Override the record length
-	buf := make([]byte, 3)
-	buf[0] = byte(recFull)
-	binary.BigEndian.PutUint16(buf[1:], 0xFFFF)
-	_, err = segmentFile.WriteAt(buf, 0)
-	assert.NoError(t, err)
-
-	err = segmentFile.Close()
-	assert.NoError(t, err)
-
-	// Try and LiveReader it.
-	m, _, err := Segments(w.Dir())
-	assert.NoError(t, err)
-
-	seg, err := OpenReadSegment(SegmentName(dir, m))
-	assert.NoError(t, err)
-	defer seg.Close()
-
-	r := NewLiveReader(logger, NewLiveReaderMetrics(nil), seg)
-	assert.True(t, r.Next() == false, "expected no records")
-	assert.True(t, r.Err().Error() == "record length greater than a single page: 65542 > 32768", "expected error, got: %v", r.Err())
 }
 
 func TestReaderData(t *testing.T) {

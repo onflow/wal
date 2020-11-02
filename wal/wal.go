@@ -33,8 +33,9 @@ import (
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 
-	"github.com/prometheus/prometheus/tsdb/fileutil"
+	"github.com/m4ksio/wal/tsdb/fileutil"
 )
 
 const (
@@ -167,7 +168,7 @@ func OpenReadSegment(fn string) (*Segment, error) {
 // beyond the most recent segment.
 type WAL struct {
 	dir         string
-	logger      log.Logger
+	logger      zerolog.Logger
 	segmentSize int
 	mtx         sync.RWMutex
 	segment     *Segment // Active segment.
@@ -241,21 +242,18 @@ func newWALMetrics(r prometheus.Registerer) *walMetrics {
 }
 
 // New returns a new WAL over the given directory.
-func New(logger log.Logger, reg prometheus.Registerer, dir string, compress bool) (*WAL, error) {
+func New(logger zerolog.Logger, reg prometheus.Registerer, dir string, compress bool) (*WAL, error) {
 	return NewSize(logger, reg, dir, DefaultSegmentSize, compress)
 }
 
 // NewSize returns a new WAL over the given directory.
 // New segments are created with the specified size.
-func NewSize(logger log.Logger, reg prometheus.Registerer, dir string, segmentSize int, compress bool) (*WAL, error) {
+func NewSize(logger zerolog.Logger, reg prometheus.Registerer, dir string, segmentSize int, compress bool) (*WAL, error) {
 	if segmentSize%pageSize != 0 {
 		return nil, errors.New("invalid segment size")
 	}
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return nil, errors.Wrap(err, "create dir")
-	}
-	if logger == nil {
-		logger = log.NewNopLogger()
 	}
 	w := &WAL{
 		dir:         dir,
@@ -295,10 +293,7 @@ func NewSize(logger log.Logger, reg prometheus.Registerer, dir string, segmentSi
 }
 
 // Open an existing WAL.
-func Open(logger log.Logger, dir string) (*WAL, error) {
-	if logger == nil {
-		logger = log.NewNopLogger()
-	}
+func Open(logger zerolog.Logger, dir string) (*WAL, error) {
 	w := &WAL{
 		dir:    dir,
 		logger: logger,
@@ -352,15 +347,14 @@ func (w *WAL) Repair(origErr error) error {
 	if cerr.Segment < 0 {
 		return errors.New("corruption error does not specify position")
 	}
-	level.Warn(w.logger).Log("msg", "Starting corruption repair",
-		"segment", cerr.Segment, "offset", cerr.Offset)
+	w.logger.Warn().Int("segment", cerr.Segment).Int64("offset", cerr.Offset).Msg("Starting corruption repair")
 
 	// All segments behind the corruption can no longer be used.
 	segs, err := listSegments(w.Dir())
 	if err != nil {
 		return errors.Wrap(err, "list segments")
 	}
-	level.Warn(w.logger).Log("msg", "Deleting all segments newer than corrupted segment", "segment", cerr.Segment)
+	w.logger.Warn().Int("segment", cerr.Segment).Msg("Deleting all segments newer than corrupted segment")
 
 	for _, s := range segs {
 		if w.segment.i == s.index {
@@ -382,7 +376,7 @@ func (w *WAL) Repair(origErr error) error {
 	// Regardless of the corruption offset, no record reaches into the previous segment.
 	// So we can safely repair the WAL by removing the segment and re-inserting all
 	// its records up to the corruption.
-	level.Warn(w.logger).Log("msg", "Rewrite corrupted segment", "segment", cerr.Segment)
+	w.logger.Warn().Int("segment", cerr.Segment).Msg("Rewrite corrupted segment")
 
 	fn := SegmentName(w.Dir(), cerr.Segment)
 	tmpfn := fn + ".repair"
@@ -481,10 +475,10 @@ func (w *WAL) nextSegment() error {
 	// Don't block further writes by fsyncing the last segment.
 	w.actorc <- func() {
 		if err := w.fsync(prev); err != nil {
-			level.Error(w.logger).Log("msg", "sync previous segment", "err", err)
+			w.logger.Error().Err(err).Msg("sync previous segment")
 		}
 		if err := prev.Close(); err != nil {
-			level.Error(w.logger).Log("msg", "close previous segment", "err", err)
+			w.logger.Error().Err(err).Msg("close previous segment")
 		}
 	}
 	return nil
@@ -738,10 +732,10 @@ func (w *WAL) Close() (err error) {
 	<-donec
 
 	if err = w.fsync(w.segment); err != nil {
-		level.Error(w.logger).Log("msg", "sync previous segment", "err", err)
+		w.logger.Error().Err(err).Msg("sync previous segment")
 	}
 	if err := w.segment.Close(); err != nil {
-		level.Error(w.logger).Log("msg", "close previous segment", "err", err)
+		w.logger.Error().Err(err).Msg("close previous segment")
 	}
 	w.closed = true
 	return nil
@@ -895,6 +889,13 @@ func (r *segmentBufReader) Read(b []byte) (n int, err error) {
 
 // Computing size of the WAL.
 // We do this by adding the sizes of all the files under the WAL dir.
-//func (w *WAL) Size() (int64, error) {
-//	return fileutil.DirSize(w.Dir())
-//}
+func (w *WAL) Size() (int64, error) {
+	return fileutil.DirSize(w.Dir())
+}
+
+func min(i, j int) int {
+	if i < j {
+		return i
+	}
+	return j
+}

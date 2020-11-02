@@ -198,3 +198,34 @@ func (r *Reader) Offset() int64 {
 	}
 	return r.total
 }
+
+// Returns an error if the recType and i indicate an invalid record sequence.
+// As an example, if i is > 0 because we've read some amount of a partial record
+// (recFirst, recMiddle, etc. but not recLast) and then we get another recFirst or recFull
+// instead of a recLast or recMiddle we would have an invalid record.
+func validateRecord(typ recType, i int) error {
+	switch typ {
+	case recFull:
+		if i != 0 {
+			return errors.New("unexpected full record")
+		}
+		return nil
+	case recFirst:
+		if i != 0 {
+			return errors.New("unexpected first record, dropping buffer")
+		}
+		return nil
+	case recMiddle:
+		if i == 0 {
+			return errors.New("unexpected middle record, dropping buffer")
+		}
+		return nil
+	case recLast:
+		if i == 0 {
+			return errors.New("unexpected last record, dropping buffer")
+		}
+		return nil
+	default:
+		return errors.Errorf("unexpected record type %d", typ)
+	}
+}

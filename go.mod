@@ -37,6 +37,7 @@ require (
 	github.com/opentracing-contrib/go-stdlib v1.0.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pkg/errors v0.9.1
+	github.com/rs/zerolog v1.19.0
 	github.com/prometheus/alertmanager v0.21.0 // indirect
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/common v0.14.0 // indirect
@@ -52,7 +53,7 @@ require (
 	go.uber.org/goleak v1.1.10
 	golang.org/x/net v0.0.0-20201006153459-a7d1128ccaa0 // indirect
 	golang.org/x/sync v0.0.0-20200930132711-30421366ff76 // indirect
-	golang.org/x/sys v0.0.0-20201008064518-c1f3e3309c71 // indirect
+	golang.org/x/sys v0.0.0-20201008064518-c1f3e3309c71
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
 	golang.org/x/tools v0.0.0-20201020161133-226fd2f889ca // indirect
 	google.golang.org/api v0.32.0 // indirect

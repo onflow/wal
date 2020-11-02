@@ -1,4 +1,4 @@
-// Copyright 2019 The Prometheus Authors
+// Copyright 2018 The Prometheus Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -11,34 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package testutil
+// +build windows
 
-import (
-	"testing"
+package fileutil
 
-	"github.com/go-kit/kit/log"
-	"github.com/rs/zerolog"
-)
-
-type logger struct {
-	t *testing.T
-}
-
-
-
-// NewLogger returns a gokit compatible Logger which calls t.Log.
-func NewLogger(t *testing.T) zerolog.Logger {
-
-	zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
-		w.Out =
-	})
-
-	zerolog.New()
-	return logger{t: t}
-}
-
-// Log implements log.Logger.
-func (t logger) Log(keyvals ...interface{}) error {
-	t.t.Log(keyvals...)
-	return nil
-}
+const maxMapSize = 0x7FFFFFFF // 2GB

@@ -24,11 +24,12 @@ import (
 	"testing"
 
 	client_testutil "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
 
-	"github.com/prometheus/prometheus/tsdb/fileutil"
-	"github.com/prometheus/prometheus/util/testutil"
+	"github.com/m4ksio/wal/tsdb/fileutil"
+	"github.com/m4ksio/wal/util/testutil"
 )
 
 func TestMain(m *testing.M) {
@@ -128,7 +129,7 @@ func TestWALRepair_ReadingError(t *testing.T) {
 			// then corrupt a given record in a given segment.
 			// As a result we want a repaired WAL with given intact records.
 			segSize := 3 * pageSize
-			w, err := NewSize(nil, nil, dir, segSize, false)
+			w, err := NewSize(zerolog.Nop(), nil, dir, segSize, false)
 			assert.NoError(t, err)
 
 			var records [][]byte
@@ -153,7 +154,7 @@ func TestWALRepair_ReadingError(t *testing.T) {
 
 			assert.NoError(t, f.Close())
 
-			w, err = NewSize(nil, nil, dir, segSize, false)
+			w, err = NewSize(zerolog.Nop(), nil, dir, segSize, false)
 			assert.NoError(t, err)
 			defer w.Close()
 
@@ -221,6 +222,8 @@ func TestCorruptAndCarryOn(t *testing.T) {
 	defer func() {
 		assert.NoError(t, os.RemoveAll(dir))
 	}()
+
+	t.Error()
 
 	var (
 		logger      = testutil.NewLogger(t)
@@ -302,7 +305,7 @@ func TestCorruptAndCarryOn(t *testing.T) {
 		err = sr.Close()
 		assert.NoError(t, err)
 
-		w, err := NewSize(logger, nil, dir, segmentSize, false)
+		w, err := NewSize(zerolog.Nop(), nil, dir, segmentSize, false)
 		assert.NoError(t, err)
 
 		err = w.Repair(corruptionErr)
@@ -349,7 +352,7 @@ func TestClose(t *testing.T) {
 	defer func() {
 		assert.NoError(t, os.RemoveAll(dir))
 	}()
-	w, err := NewSize(nil, nil, dir, pageSize, false)
+	w, err := NewSize(zerolog.Nop(), nil, dir, pageSize, false)
 	assert.NoError(t, err)
 	assert.NoError(t, w.Close())
 	assert.Error(t, w.Close())
@@ -366,7 +369,7 @@ func TestSegmentMetric(t *testing.T) {
 	defer func() {
 		assert.NoError(t, os.RemoveAll(dir))
 	}()
-	w, err := NewSize(nil, nil, dir, segmentSize, false)
+	w, err := NewSize(zerolog.Nop(), nil, dir, segmentSize, false)
 	assert.NoError(t, err)
 
 	initialSegment := client_testutil.ToFloat64(w.metrics.currentSegment)
@@ -395,7 +398,7 @@ func TestCompression(t *testing.T) {
 		dirPath, err := ioutil.TempDir("", fmt.Sprintf("TestCompression_%t", compressed))
 		assert.NoError(t, err)
 
-		w, err := NewSize(nil, nil, dirPath, segmentSize, compressed)
+		w, err := NewSize(zerolog.Nop(), nil, dirPath, segmentSize, compressed)
 		assert.NoError(t, err)
 
 		buf := make([]byte, recordSize)
@@ -433,7 +436,7 @@ func BenchmarkWAL_LogBatched(b *testing.B) {
 				assert.NoError(b, os.RemoveAll(dir))
 			}()
 
-			w, err := New(nil, nil, dir, compress)
+			w, err := New(zerolog.Nop(), nil, dir, compress)
 			assert.NoError(b, err)
 			defer w.Close()
 
@@ -467,7 +470,7 @@ func BenchmarkWAL_Log(b *testing.B) {
 				assert.NoError(b, os.RemoveAll(dir))
 			}()
 
-			w, err := New(nil, nil, dir, compress)
+			w, err := New(zerolog.Nop(), nil, dir, compress)
 			assert.NoError(b, err)
 			defer w.Close()
 
