@@ -28,8 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
 
-	"github.com/m4ksio/wal/tsdb/fileutil"
-	"github.com/m4ksio/wal/util/testutil"
+	"github.com/m4ksio/wal/fileutil"
+	"github.com/m4ksio/wal/util"
 )
 
 func TestMain(m *testing.M) {
@@ -223,10 +223,8 @@ func TestCorruptAndCarryOn(t *testing.T) {
 		assert.NoError(t, os.RemoveAll(dir))
 	}()
 
-	t.Error()
-
 	var (
-		logger      = testutil.NewLogger(t)
+		logger      = util.NewLogger(t)
 		segmentSize = pageSize * 3
 		recordSize  = (pageSize / 3) - recordHeaderSize
 	)

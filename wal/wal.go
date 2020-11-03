@@ -35,7 +35,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 
-	"github.com/m4ksio/wal/tsdb/fileutil"
+	"github.com/m4ksio/wal/fileutil"
 )
 
 const (

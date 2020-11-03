@@ -11,34 +11,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package testutil
+package util
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
-	"github.com/go-kit/kit/log"
 	"github.com/rs/zerolog"
 )
 
 type logger struct {
-	t *testing.T
+	t   *testing.T
+	buf bytes.Buffer
 }
 
+func (l *logger) Write(p []byte) (n int, err error) {
+	n, err = l.buf.Write(p)
+	if err != nil {
+		return n, err
+	}
 
+	if p[len(p)-1] == '\n' {
+		lines := strings.Split(l.buf.String(), "\n")
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed != "" {
+				l.t.Log(trimmed)
+			}
+		}
+		l.buf.Reset()
+	}
+
+	return
+}
 
 // NewLogger returns a gokit compatible Logger which calls t.Log.
 func NewLogger(t *testing.T) zerolog.Logger {
 
-	zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
-		w.Out =
+	consoleWriter := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = &logger{t: t}
 	})
 
-	zerolog.New()
-	return logger{t: t}
-}
-
-// Log implements log.Logger.
-func (t logger) Log(keyvals ...interface{}) error {
-	t.t.Log(keyvals...)
-	return nil
+	return zerolog.New(consoleWriter)
 }

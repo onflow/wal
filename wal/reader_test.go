@@ -26,9 +26,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
-	tsdb_errors "github.com/m4ksio/wal/tsdb/errors"
+	tsdb_errors "github.com/m4ksio/wal/errors"
 )
 
 type reader interface {
@@ -269,7 +270,7 @@ func TestReaderFuzz(t *testing.T) {
 					assert.NoError(t, os.RemoveAll(dir))
 				}()
 
-				w, err := NewSize(nil, nil, dir, 128*pageSize, compress)
+				w, err := NewSize(zerolog.Nop(), nil, dir, 128*pageSize, compress)
 				assert.NoError(t, err)
 
 				// Buffering required as we're not reading concurrently.
@@ -304,7 +305,7 @@ func TestReaderData(t *testing.T) {
 
 	for name, fn := range readerConstructors {
 		t.Run(name, func(t *testing.T) {
-			w, err := New(nil, nil, dir, true)
+			w, err := New(zerolog.Nop(), nil, dir, true)
 			assert.NoError(t, err)
 
 			sr, err := allSegments(dir)
