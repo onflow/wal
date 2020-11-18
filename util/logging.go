@@ -46,7 +46,7 @@ func (l *logger) Write(p []byte) (n int, err error) {
 	return
 }
 
-// NewLogger returns a gokit compatible Logger which calls t.Log.
+// NewLogger returns a zerolog compatible logger
 func NewLogger(t *testing.T) zerolog.Logger {
 
 	consoleWriter := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {

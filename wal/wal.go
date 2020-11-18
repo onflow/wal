@@ -581,6 +581,11 @@ func (w *WAL) Log(recs ...[]byte) error {
 			return err
 		}
 	}
+
+	if err := w.fsync(w.segment); err != nil {
+		w.logger.Error().Err(err).Msg("sync previous segment")
+	}
+
 	return nil
 }
 
