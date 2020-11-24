@@ -193,6 +193,13 @@ type walMetrics struct {
 	writesFailed    prometheus.Counter
 }
 
+// LogLocation indicates where the log entry is placed
+// inside WAL - by segment number and it's offset in file, in bytes.
+type LogLocation struct {
+	Segment int
+	Offset  int
+}
+
 func newWALMetrics(r prometheus.Registerer) *walMetrics {
 	m := &walMetrics{}
 
@@ -406,8 +413,8 @@ func (w *WAL) Repair(origErr error) error {
 		if r.Offset() >= cerr.Offset {
 			break
 		}
-		if err := w.Log(r.Record()); err != nil {
-			return errors.Wrap(err, "insert record")
+		if loc, err := w.Log(r.Record()); err != nil {
+			return errors.Wrapf(err, "insert record segment %d offset %d", loc[0].Segment, loc[0].Offset)
 		}
 	}
 	// We expect an error here from r.Err(), so nothing to handle.
@@ -570,35 +577,40 @@ func (w *WAL) pagesPerSegment() int {
 
 // Log writes the records into the log.
 // Multiple records can be passed at once to reduce writes and increase throughput.
-func (w *WAL) Log(recs ...[]byte) error {
+func (w *WAL) Log(recs ...[]byte) ([]LogLocation, error) {
 	w.mtx.Lock()
 	defer w.mtx.Unlock()
+
+	locations := make([]LogLocation, len(recs))
+
 	// Callers could just implement their own list record format but adding
 	// a bit of extra logic here frees them from that overhead.
 	for i, r := range recs {
-		if err := w.log(r, i == len(recs)-1); err != nil {
+		location, err := w.log(r, i == len(recs)-1)
+		if err != nil {
 			w.metrics.writesFailed.Inc()
-			return err
+			return locations, err
 		}
+		locations[i] = location
 	}
 
 	if err := w.fsync(w.segment); err != nil {
 		w.logger.Error().Err(err).Msg("sync previous segment")
 	}
 
-	return nil
+	return locations, nil
 }
 
 // log writes rec to the log and forces a flush of the current page if:
 // - the final record of a batch
 // - the record is bigger than the page size
 // - the current page is full.
-func (w *WAL) log(rec []byte, final bool) error {
+func (w *WAL) log(rec []byte, final bool) (LogLocation, error) {
 	// When the last page flush failed the page will remain full.
 	// When the page is full, need to flush it before trying to add more records to it.
 	if w.page.full() {
 		if err := w.flushPage(true); err != nil {
-			return err
+			return LogLocation{}, err
 		}
 	}
 	// If the record is too big to fit within the active page in the current
@@ -609,7 +621,7 @@ func (w *WAL) log(rec []byte, final bool) error {
 
 	if len(rec) > left {
 		if err := w.nextSegment(); err != nil {
-			return err
+			return LogLocation{}, err
 		}
 	}
 
@@ -624,6 +636,11 @@ func (w *WAL) log(rec []byte, final bool) error {
 			rec = w.snappyBuf
 			compressed = true
 		}
+	}
+
+	location := LogLocation{
+		Segment: w.segment.i,
+		Offset:  (w.donePages * pageSize) + w.page.alloc,
 	}
 
 	// Populate as many pages as necessary to fit the record.
@@ -663,7 +680,7 @@ func (w *WAL) log(rec []byte, final bool) error {
 
 		if w.page.full() {
 			if err := w.flushPage(true); err != nil {
-				return err
+				return LogLocation{}, err
 			}
 		}
 		rec = rec[l:]
@@ -672,11 +689,11 @@ func (w *WAL) log(rec []byte, final bool) error {
 	// If it's the final record of the batch and the page is not empty, flush it.
 	if final && w.page.alloc > 0 {
 		if err := w.flushPage(false); err != nil {
-			return err
+			return LogLocation{}, err
 		}
 	}
 
-	return nil
+	return location, nil
 }
 
 // Truncate drops all segments before i.

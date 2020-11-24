@@ -212,13 +212,14 @@ func generateRandomEntries(w *WAL, records chan []byte) error {
 		// Randomly batch up records.
 		recs = append(recs, rec)
 		if rand.Intn(4) < 3 {
-			if err := w.Log(recs...); err != nil {
+			if _, err := w.Log(recs...); err != nil {
 				return err
 			}
 			recs = recs[:0]
 		}
 	}
-	return w.Log(recs...)
+	_, err := w.Log(recs...)
+	return err
 }
 
 type multiReadCloser struct {

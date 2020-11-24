@@ -138,7 +138,8 @@ func TestWALRepair_ReadingError(t *testing.T) {
 				b := make([]byte, pageSize-recordHeaderSize)
 				b[0] = byte(i)
 				records = append(records, b)
-				assert.NoError(t, w.Log(b))
+				_, err := w.Log(b)
+				assert.NoError(t, err)
 			}
 			first, last, err := Segments(w.Dir())
 			assert.NoError(t, err)
@@ -240,7 +241,7 @@ func TestCorruptAndCarryOn(t *testing.T) {
 			_, err := rand.Read(buf)
 			assert.NoError(t, err)
 
-			err = w.Log(buf)
+			_, err = w.Log(buf)
 			assert.NoError(t, err)
 		}
 
@@ -318,7 +319,7 @@ func TestCorruptAndCarryOn(t *testing.T) {
 			_, err := rand.Read(buf)
 			assert.NoError(t, err)
 
-			err = w.Log(buf)
+			_, err = w.Log(buf)
 			assert.NoError(t, err)
 		}
 
@@ -378,7 +379,7 @@ func TestSegmentMetric(t *testing.T) {
 		_, err := rand.Read(buf)
 		assert.NoError(t, err)
 
-		err = w.Log(buf)
+		_, err = w.Log(buf)
 		assert.NoError(t, err)
 	}
 	assert.True(t, client_testutil.ToFloat64(w.metrics.currentSegment) == initialSegment+1, "segment metric did not increment after segment rotation")
@@ -401,7 +402,8 @@ func TestCompression(t *testing.T) {
 
 		buf := make([]byte, recordSize)
 		for i := 0; i < records; i++ {
-			assert.NoError(t, w.Log(buf))
+			_, err := w.Log(buf)
+			assert.NoError(t, err)
 		}
 		assert.NoError(t, w.Close())
 
@@ -447,7 +449,7 @@ func BenchmarkWAL_LogBatched(b *testing.B) {
 				if len(recs) < 1000 {
 					continue
 				}
-				err := w.Log(recs...)
+				_, err := w.Log(recs...)
 				assert.NoError(b, err)
 				recs = recs[:0]
 			}
@@ -476,7 +478,7 @@ func BenchmarkWAL_Log(b *testing.B) {
 			b.SetBytes(2048)
 
 			for i := 0; i < b.N; i++ {
-				err := w.Log(buf[:])
+				_, err := w.Log(buf[:])
 				assert.NoError(b, err)
 			}
 			// Stop timer to not count fsync time on close.
