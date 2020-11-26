@@ -1,0 +1,2 @@
+WAL is a library providing Write-Ahead Log implementation based on Prometheus code ( https://github.com/prometheus/prometheus )
+Library forked from Prometheus codebase at commit 3f8e51738cea76e22cf52bac42075b7247479733
