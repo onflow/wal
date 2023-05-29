@@ -1,4 +1,4 @@
-module github.com/m4ksio/wal
+module github.com/onflow/wal
 
 go 1.19
 
