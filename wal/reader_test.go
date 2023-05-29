@@ -29,7 +29,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
-	tsdb_errors "github.com/m4ksio/wal/errors"
+	tsdb_errors "github.com/onflow/wal/errors"
 )
 
 type reader interface {
