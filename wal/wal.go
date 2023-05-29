@@ -799,7 +799,7 @@ func listSegments(dir string) (refs []segmentRef, err error) {
 	})
 	for i := 0; i < len(refs)-1; i++ {
 		if refs[i].index+1 != refs[i+1].index {
-			return nil, errors.New("segments are not sequential")
+			return nil, fmt.Errorf("segments are not sequential: %v + 1 != %v", refs[i].index, refs[i+1].index)
 		}
 	}
 	return refs, nil
