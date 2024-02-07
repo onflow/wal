@@ -167,7 +167,9 @@ func TestWALRepair_ReadingError(t *testing.T) {
 				s, err := OpenReadSegment(SegmentName(w.Dir(), i))
 				assert.NoError(t, err)
 
-				sr := NewSegmentBufReader(s)
+				buf := bytes.NewBufferString("")
+				lg := zerolog.New(buf)
+				sr := NewSegmentBufReader(lg, s)
 				assert.NoError(t, err)
 				r := NewReader(sr)
 				for r.Next() {
@@ -184,7 +186,9 @@ func TestWALRepair_ReadingError(t *testing.T) {
 				break
 			}
 
-			sr, err := NewSegmentsReader(dir)
+			buf := bytes.NewBufferString("")
+			lg := zerolog.New(buf)
+			sr, err := NewSegmentsReader(lg, dir)
 			assert.NoError(t, err)
 			defer sr.Close()
 			r := NewReader(sr)
@@ -287,7 +291,10 @@ func TestCorruptAndCarryOn(t *testing.T) {
 
 	// Now try and repair this WAL, and write 5 more records to it.
 	{
-		sr, err := NewSegmentsReader(dir)
+
+		buf := bytes.NewBufferString("")
+		lg := zerolog.New(buf)
+		sr, err := NewSegmentsReader(lg, dir)
 		assert.NoError(t, err)
 
 		reader := NewReader(sr)
@@ -329,7 +336,9 @@ func TestCorruptAndCarryOn(t *testing.T) {
 
 	// Replay the WAL. Should get 9 records.
 	{
-		sr, err := NewSegmentsReader(dir)
+		buf := bytes.NewBufferString("")
+		lg := zerolog.New(buf)
+		sr, err := NewSegmentsReader(lg, dir)
 		assert.NoError(t, err)
 
 		reader := NewReader(sr)
