@@ -812,13 +812,13 @@ type SegmentRange struct {
 }
 
 // NewSegmentsReader returns a new reader over all segments in the directory.
-func NewSegmentsReader(dir string) (io.ReadCloser, error) {
-	return NewSegmentsRangeReader(SegmentRange{dir, -1, -1})
+func NewSegmentsReader(logger zerolog.Logger, dir string) (io.ReadCloser, error) {
+	return NewSegmentsRangeReader(logger, SegmentRange{dir, -1, -1})
 }
 
 // NewSegmentsRangeReader returns a new reader over the given WAL segment ranges.
 // If first or last are -1, the range is open on the respective end.
-func NewSegmentsRangeReader(sr ...SegmentRange) (io.ReadCloser, error) {
+func NewSegmentsRangeReader(logger zerolog.Logger, sr ...SegmentRange) (io.ReadCloser, error) {
 	var segs []*Segment
 
 	for _, sgmRange := range sr {
@@ -841,7 +841,7 @@ func NewSegmentsRangeReader(sr ...SegmentRange) (io.ReadCloser, error) {
 			segs = append(segs, s)
 		}
 	}
-	return NewSegmentBufReader(segs...), nil
+	return NewSegmentBufReader(logger, segs...), nil
 }
 
 // segmentBufReader is a buffered reader that reads in multiples of pages.
@@ -850,17 +850,19 @@ func NewSegmentsRangeReader(sr ...SegmentRange) (io.ReadCloser, error) {
 // early, as it is used by Reader.Err() to tell Repair which segment is corrupt.
 // As such we pad the end of non-page align segments with zeros.
 type segmentBufReader struct {
-	buf  *bufio.Reader
-	segs []*Segment
-	cur  int // Index into segs.
-	off  int // Offset of read data into current segment.
+	buf    *bufio.Reader
+	segs   []*Segment
+	logger zerolog.Logger
+	cur    int // Index into segs.
+	off    int // Offset of read data into current segment.
 }
 
 // nolint:golint // TODO: Consider exporting segmentBufReader
-func NewSegmentBufReader(segs ...*Segment) *segmentBufReader {
+func NewSegmentBufReader(logger zerolog.Logger, segs ...*Segment) *segmentBufReader {
 	return &segmentBufReader{
-		buf:  bufio.NewReaderSize(segs[0], 16*pageSize),
-		segs: segs,
+		buf:    bufio.NewReaderSize(segs[0], 16*pageSize),
+		segs:   segs,
+		logger: logger,
 	}
 }
 
@@ -906,6 +908,7 @@ func (r *segmentBufReader) Read(b []byte) (n int, err error) {
 	r.cur++
 	r.off = 0
 	r.buf.Reset(r.segs[r.cur])
+	r.logger.Info().Msgf("reading %v/%v wal segment file from: %v", r.cur, len(r.segs), r.segs[r.cur].dir)
 	return n, nil
 }
 
